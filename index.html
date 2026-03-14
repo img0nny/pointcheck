@@ -103,10 +103,10 @@
 
             appDiv.innerHTML = `
                 <div class="text-center mb-8 fade-in pt-6">
-                    <p class="text-blue-400 font-bold tracking-widest mb-2 comic-font text-xl">1차전 성적 기반 팀 밸런싱</p>
+                    <p class="text-blue-400 font-bold tracking-widest mb-2 comic-font text-xl">스마트 AI 밸런스 배정</p>
                     <h1 class="text-4xl md:text-5xl title-font text-white mb-4 leading-tight">개인별 점수 입력</h1>
                     <p class="text-slate-400 text-sm bg-slate-800/50 inline-block px-4 py-2 rounded-full border border-slate-700">
-                        1차전 점수를 입력하면 실시간으로 최적의 <strong class="text-blue-400">팀 밸런스</strong>를 계산합니다.
+                        1차전 점수를 입력하면 가장 공정한 <strong class="text-blue-400">황금 팀 밸런스</strong>를 자동 계산합니다.
                     </p>
                 </div>
                 <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 md:gap-5 mb-10 fade-in">
@@ -121,7 +121,7 @@
             `;
         };
 
-        // 팀 계산 및 저장
+        // 팀 계산 및 저장 (스마트 황금 밸런스 알고리즘 적용)
         window.calculateTeams = async function() {
             let updatedPlayers = [];
             let validPlayerCount = 0;
@@ -139,8 +139,8 @@
                 if(!confirm(`현재 ${validPlayerCount}명만 참여했습니다. 나머지 인원은 0점으로 처리됩니다. 계속할까요?`)) return;
             }
 
+            // 점수순 정렬
             const sortedPlayers = [...updatedPlayers].sort((a, b) => b.score - a.score);
-            const pattern = [1, 2, 3, 4, 4, 3, 2, 1, 1, 2, 3, 4, 4, 3, 2, 1];
             
             let teams = {
                 1: { id: 1, title: "1팀", emoji: "🐯", members: [], totalScore: 0 },
@@ -149,16 +149,28 @@
                 4: { id: 4, title: "4팀", emoji: "🦖", members: [], totalScore: 0 }
             };
 
+            // 팀당 배정할 수 있는 최대 인원 (15명이면 최대 4명까지 허용)
+            const maxPerTeam = Math.ceil(sortedPlayers.length / 4);
+
+            // 🌟 핵심 로직: 현재 팀 합산 점수가 "가장 낮은" 팀에게 다음 사람을 최우선 배정!
             sortedPlayers.forEach((player, index) => {
-                const teamNum = pattern[index];
-                if(teams[teamNum]) {
-                    player.internalRank = index + 1;
-                    teams[teamNum].members.push(player);
-                    teams[teamNum].totalScore += player.score;
+                player.internalRank = index + 1;
+                
+                // 아직 정원이 꽉 차지 않은 팀들만 필터링
+                const availableTeams = Object.values(teams).filter(t => t.members.length < maxPerTeam);
+                
+                // 팀 합산 점수가 가장 낮은 순으로 정렬 (동점이면 1팀부터)
+                availableTeams.sort((a, b) => a.totalScore - b.totalScore || a.id - b.id);
+                
+                // 가장 점수가 부족한 팀에 플레이어 투입
+                const targetTeam = availableTeams[0];
+                if(targetTeam) {
+                    targetTeam.members.push(player);
+                    targetTeam.totalScore += player.score;
                 }
             });
 
-            // 팀 점수 합산 기준 순위 (3번 앱 상품 박스 매칭용)
+            // 데이터 연동을 위한 최종 등수 매기기 (상품 박스 선택용)
             const teamRankings = Object.values(teams).sort((a, b) => b.totalScore - a.totalScore);
             teamRankings.forEach((team, idx) => { team.finalRank = idx + 1; });
 
@@ -173,19 +185,19 @@
                     lastUpdate: new Date().getTime(),
                     teamDetails: teamRankings 
                 });
-                window.renderResultScreen(teams, teamRankings);
+                window.renderResultScreen(teams); // UI용 렌더링
             } catch (e) {
                 alert("결과 저장 중 오류가 발생했습니다.");
             }
         };
 
-        // 결과 확인 화면 (수정된 부분)
-        window.renderResultScreen = function(teams, teamRankings) {
+        // 결과 확인 화면 (요청하신 부분 모두 삭제됨)
+        window.renderResultScreen = function(teams) {
             window.currentView = 'result';
             window.scrollTo(0, 0); 
 
             let teamsHTML = '';
-            // 팀 번호 순서(1~4)대로 노출하되, 등수 뱃지를 함께 표시
+            // 팀 번호 1~4팀 순서대로 깔끔하게 출력
             [1, 2, 3, 4].forEach((teamId) => {
                 const team = teams[teamId];
                 let membersHTML = team.members.map(m => `
