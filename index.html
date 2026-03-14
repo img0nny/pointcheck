@@ -10,48 +10,33 @@
         body { font-family: 'Noto Sans KR', sans-serif; background-color: #0f172a; min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; color: white; }
         .title-font { font-family: 'Black Han Sans', sans-serif; }
         .comic-font { font-family: 'Jua', sans-serif; }
-        
         .fade-in { animation: fadeIn 0.4s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        
         .pop-up { animation: popUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         @keyframes popUp { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-
         .btn-glow { box-shadow: 0 0 20px rgba(236, 72, 153, 0.4); }
-        
-        /* 등수별 뱃지 색상 */
         .rank-1 { background: linear-gradient(135deg, #fbbf24, #d97706); }
         .rank-2 { background: linear-gradient(135deg, #cbd5e1, #64748b); }
         .rank-3 { background: linear-gradient(135deg, #d97706, #92400e); }
         .rank-other { background: #334155; }
-
-        /* 🚨 숫자 입력창 우측의 증감 버튼(스피너 휠) 완벽 제거 */
         input[type="number"]::-webkit-outer-spin-button,
-        input[type="number"]::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        input[type="number"] {
-            -moz-appearance: textfield;
-        }
+        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
     </style>
 </head>
 <body class="relative">
 
     <div id="app" class="w-full max-w-5xl mx-auto p-4 md:p-8 flex-1 flex flex-col">
-        <!-- JS 렌더링 영역 -->
         <div class="flex-1 flex justify-center items-center text-slate-400 text-lg font-bold flex-col gap-4 pt-20">
             <div class="text-5xl animate-spin comic-font">🌀</div>
-            <p class="animate-pulse">서버에서 1차전 팀 명단을 불러오고 있습니다...</p>
+            <p class="animate-pulse">서버에서 명단을 불러오고 있습니다...</p>
         </div>
     </div>
 
-    <!-- Firebase 모듈 및 스크립트 로드 -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // 기존 1차전 팀 배정(project3) 앱과 완벽히 동일한 파이어베이스 서버 연결
         const firebaseConfig = {
             apiKey: "AIzaSyAlrDE_xgT6VBwEQ7AtqEkPfIng6tuK38g",
             authDomain: "img0nny.firebaseapp.com",
@@ -63,81 +48,54 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const docRef = doc(db, "bowling_event", "teams");
+        
+        // 1차전 팀 명단 참조
+        const teamDocRef = doc(db, "bowling_event", "teams");
+        // 2차전 최종 순위 저장용 참조 (3번 앱에서 이 데이터를 읽음)
+        const resultDocRef = doc(db, "bowling_event", "round2_results");
 
         window.currentView = null;
-        window.playersData = []; // 서버에서 받아올 16개의 이름 배열
-        
-        // 점수 데이터는 닉네임과 매칭하여 로컬에 안전하게 저장 (서버 갱신 시 점수 증발 방지)
+        window.playersData = []; 
         window.localScores = JSON.parse(localStorage.getItem('round2_scores_by_name')) || {};
 
         const appDiv = document.getElementById('app');
 
-        // 📡 [핵심] 1차전 명단 실시간 동기화 리스너
-        onSnapshot(docRef, (docSnap) => {
+        onSnapshot(teamDocRef, (docSnap) => {
             if (docSnap.exists()) {
                 const cards = docSnap.data().cards;
                 let fetchedNames = [];
-                
-                // 16개 카드 중 주인이 있는(추첨 완료한) 사람들의 이름만 추출
                 for(let i=1; i<=16; i++) {
-                    if(cards[i] && cards[i].owner) {
-                        fetchedNames.push(cards[i].owner);
-                    }
+                    if(cards[i] && cards[i].owner) fetchedNames.push(cards[i].owner);
                 }
+                while(fetchedNames.length < 16) fetchedNames.push("");
                 
-                // 빈자리는 "대기 중..." 처리를 위해 빈 문자열로 16칸 꽉 채우기
-                while(fetchedNames.length < 16) {
-                    fetchedNames.push("");
-                }
-                
-                // 변경점이 있는지 체크 (타이핑 중에 화면이 강제로 깜빡이는 것 방지)
-                let hasChanged = false;
-                for(let i=0; i<16; i++) {
-                    if(window.playersData[i] !== fetchedNames[i]) {
-                        hasChanged = true; break;
-                    }
-                }
-
+                let hasChanged = JSON.stringify(window.playersData) !== JSON.stringify(fetchedNames);
                 if (hasChanged) {
                     window.playersData = fetchedNames;
-                    // 결과 화면이 아닐 때만 입력 폼을 새로고침
-                    if(window.currentView === 'input' || !window.currentView) {
-                        window.renderInputScreen();
-                    }
+                    if(window.currentView === 'input' || !window.currentView) window.renderInputScreen();
                 }
             } else {
-                // 문서가 비어있을 경우 예외 처리
                 window.playersData = Array(16).fill("");
                 if(!window.currentView) window.renderInputScreen();
             }
         });
 
-        // 💾 실시간 점수 로컬 저장 함수 (인풋창 변경 시 즉시 발동)
         window.saveScore = function(name, value) {
-            if(!name) return; // 대기 중 빈칸은 무시
+            if(!name) return;
             window.localScores[name] = value;
             localStorage.setItem('round2_scores_by_name', JSON.stringify(window.localScores));
         };
 
-        // 1. 점수 입력 화면 렌더링
         window.renderInputScreen = function() {
             window.currentView = 'input';
             let inputsHTML = '';
-            
             window.playersData.forEach((playerName, index) => {
-                // 저장된 점수가 있으면 불러오고 없으면 빈칸
                 const currentScore = (playerName && window.localScores[playerName] !== undefined) ? window.localScores[playerName] : '';
                 const isWaiting = !playerName;
-                
                 inputsHTML += `
                     <div class="bg-slate-800/80 p-5 rounded-2xl border border-slate-600 flex flex-col gap-3 shadow-lg ${isWaiting ? 'opacity-40 grayscale' : 'hover:border-pink-500'} transition-colors">
-                        
-                        <!-- 이름 (서버에서 자동 연동되어 읽기 전용) -->
                         <input type="text" id="name_${index}" value="${playerName}" class="w-full bg-transparent ${isWaiting ? 'text-slate-500' : 'text-white'} font-black text-2xl md:text-3xl border-b border-slate-600 outline-none pb-2 comic-font text-center cursor-default" placeholder="[ 대기 중 ]" readonly>
-                        
                         <div class="flex items-center gap-2 mt-1">
-                            <!-- 점수 입력 (숫자 스피너 휠 삭제됨) -->
                             <input type="number" id="score_${index}" value="${currentScore}" oninput="window.saveScore('${playerName}', this.value)" class="w-full bg-slate-900 ${isWaiting ? 'text-slate-600' : 'text-pink-400'} font-black text-3xl text-center rounded-lg py-3 outline-none border border-slate-700 focus:border-pink-500 transition-colors" placeholder="점수" ${isWaiting ? 'disabled' : ''}>
                             <span class="text-slate-400 font-bold whitespace-nowrap">점</span>
                         </div>
@@ -148,161 +106,144 @@
             appDiv.innerHTML = `
                 <div class="text-center mb-8 fade-in pt-6">
                     <p class="text-pink-400 font-bold tracking-widest mb-2 comic-font text-xl">1차전 명단 동기화 완료!</p>
-                    <h1 class="text-4xl md:text-5xl title-font text-white mb-4 leading-tight">
-                        개인별 점수 입력
-                    </h1>
+                    <h1 class="text-4xl md:text-5xl title-font text-white mb-4 leading-tight">개인별 점수 입력</h1>
                     <p class="text-slate-400 text-sm bg-slate-800/50 inline-block px-4 py-2 rounded-full border border-slate-700">
-                        1차전 뽑기 앱에서 카드를 선택하면 빈자리에 이름이 <strong class="text-blue-400">자동으로 추가</strong>됩니다.
+                        점수를 입력하면 2차전 밸런스 팀이 자동 배정됩니다.
                     </p>
                 </div>
-                
                 <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 md:gap-5 mb-10 fade-in">
                     ${inputsHTML}
                 </div>
-
-                <!-- 버튼 컨테이너 (세로 정렬 유지) -->
                 <div class="flex flex-col items-center gap-5 pb-12 fade-in">
                     <button onclick="window.calculateTeams()" class="btn-glow bg-gradient-to-r from-pink-500 to-purple-600 text-white font-black py-4 px-12 rounded-full text-xl hover:scale-105 active:scale-95 transition-all w-full md:w-auto shadow-xl">
                         ⚖️ 2차전 밸런스 팀 배정하기!
                     </button>
-                    
-                    <button onclick="window.resetData()" class="text-slate-400 text-sm underline hover:text-white transition-colors bg-slate-800/50 px-4 py-2 rounded-full">
-                        입력된 점수 초기화
-                    </button>
+                    <button onclick="window.resetData()" class="text-slate-400 text-sm underline hover:text-white transition-colors bg-slate-800/50 px-4 py-2 rounded-full">입력된 점수 초기화</button>
                 </div>
             `;
         };
 
-        // 배정 로직 실행
-        window.calculateTeams = function() {
+        window.calculateTeams = async function() {
             let updatedPlayers = [];
-            let hasEmptyScore = false;
             let validPlayerCount = 0;
 
             for (let i = 0; i < 16; i++) {
                 const nameVal = document.getElementById(`name_${i}`).value.trim();
                 const scoreVal = document.getElementById(`score_${i}`).value.trim();
-                
                 if (nameVal && nameVal !== '대기 중') {
                     validPlayerCount++;
-                    if (scoreVal === '') hasEmptyScore = true;
-                    
-                    updatedPlayers.push({
-                        id: i + 1,
-                        name: nameVal,
-                        score: scoreVal === '' ? 0 : parseInt(scoreVal, 10)
-                    });
+                    updatedPlayers.push({ name: nameVal, score: scoreVal === '' ? 0 : parseInt(scoreVal, 10) });
                 }
             }
 
             if(validPlayerCount < 16) {
-                if(!confirm(`현재 서버에 접수된 인원이 ${validPlayerCount}명입니다. 아직 뽑기를 하지 않은 대기자가 있습니다. 그래도 배정을 강행하시겠습니까?`)) return;
-            } else if (hasEmptyScore) {
-                if (!confirm("점수가 입력되지 않은 인원이 있습니다. (해당 인원은 0점으로 처리됩니다.) 진행하시겠습니까?")) return;
+                if(!confirm(`현재 16명 중 ${validPlayerCount}명만 참여했습니다. 그래도 배정을 진행할까요?`)) return;
             }
 
-            // 점수 내림차순 정렬
+            // 점수 내림차순 정렬 후 지그재그 배정
             const sortedPlayers = [...updatedPlayers].sort((a, b) => b.score - a.score);
-
-            // 지그재그(ㄹ자) 뱀 드래프트 배정 패턴
             const pattern = [1, 2, 3, 4, 4, 3, 2, 1, 1, 2, 3, 4, 4, 3, 2, 1];
             
             let teams = {
-                1: { title: "1팀 (골드)", emoji: "🐯", color: "text-yellow-400", border: "border-yellow-500/50", members: [], totalScore: 0 },
-                2: { title: "2팀 (실버)", emoji: "🦅", color: "text-slate-300", border: "border-slate-300/50", members: [], totalScore: 0 },
-                3: { title: "3팀 (브론즈)", emoji: "🐻", color: "text-amber-500", border: "border-amber-600/50", members: [], totalScore: 0 },
-                4: { title: "4팀 (그린)", emoji: "🦖", color: "text-emerald-400", border: "border-emerald-500/50", members: [], totalScore: 0 }
+                1: { id: 1, title: "1팀 (골드)", emoji: "🐯", members: [], totalScore: 0 },
+                2: { id: 2, title: "2팀 (실버)", emoji: "🦅", members: [], totalScore: 0 },
+                3: { id: 3, title: "3팀 (브론즈)", emoji: "🐻", members: [], totalScore: 0 },
+                4: { id: 4, title: "4팀 (그린)", emoji: "🦖", members: [], totalScore: 0 }
             };
 
             sortedPlayers.forEach((player, index) => {
                 const teamNum = pattern[index];
-                if(teams[teamNum]) { // 16명이 넘어가면 무시, 부족해도 순서대로 들어감
+                if(teams[teamNum]) {
                     player.rank = index + 1;
                     teams[teamNum].members.push(player);
                     teams[teamNum].totalScore += player.score;
                 }
             });
 
-            window.renderResultScreen(teams, sortedPlayers);
+            // 팀별 합산 점수 기준으로 팀 순위(최종 등수) 매기기
+            const teamRankings = Object.values(teams).sort((a, b) => b.totalScore - a.totalScore);
+            teamRankings.forEach((team, idx) => { team.finalRank = idx + 1; });
+
+            // 닉네임별로 최종 등수를 매핑하여 서버에 저장 (3번 앱 연동용)
+            const userRankMap = {};
+            teamRankings.forEach(team => {
+                team.members.forEach(m => {
+                    userRankMap[m.name] = team.finalRank;
+                });
+            });
+
+            try {
+                await setDoc(resultDocRef, { 
+                    rankData: userRankMap, 
+                    lastUpdate: new Date().getTime(),
+                    teamDetails: teamRankings 
+                });
+                window.renderResultScreen(teams, teamRankings);
+            } catch (e) {
+                alert("결과 저장 중 오류가 발생했습니다. 다시 시도해 주세요.");
+            }
         };
 
-        // 2. 결과 발표 화면
-        window.renderResultScreen = function(teams, sortedPlayers) {
+        window.renderResultScreen = function(teams, teamRankings) {
             window.currentView = 'result';
             window.scrollTo(0, 0); 
 
             let teamsHTML = '';
-            for (let i = 1; i <= 4; i++) {
-                const team = teams[i];
-                let membersHTML = '';
-                
-                team.members.forEach(m => {
-                    let rankBadge = '';
-                    if(m.rank === 1) rankBadge = '<span class="rank-1 text-white text-[10px] px-1.5 py-0.5 rounded font-black ml-1">1위</span>';
-                    else if(m.rank === 2) rankBadge = '<span class="rank-2 text-white text-[10px] px-1.5 py-0.5 rounded font-black ml-1">2위</span>';
-                    else if(m.rank === 3) rankBadge = '<span class="rank-3 text-white text-[10px] px-1.5 py-0.5 rounded font-black ml-1">3위</span>';
-                    else rankBadge = `<span class="rank-other text-slate-300 text-[10px] px-1.5 py-0.5 rounded font-bold ml-1">${m.rank}위</span>`;
-
-                    membersHTML += `
-                        <div class="flex justify-between items-center bg-slate-900/80 p-3 rounded-xl border border-slate-700/50 mb-2">
-                            <div class="flex items-center">
-                                <span class="text-white font-bold text-lg comic-font tracking-wide">${m.name}</span>
-                                ${rankBadge}
-                            </div>
-                            <span class="text-pink-400 font-black">${m.score} <span class="text-slate-500 text-xs font-normal">점</span></span>
+            // 팀 번호 순서가 아닌, "최종 점수 등수" 순으로 보여줌
+            teamRankings.forEach((team) => {
+                let membersHTML = team.members.map(m => `
+                    <div class="flex justify-between items-center bg-slate-900/80 p-3 rounded-xl border border-slate-700/50 mb-2">
+                        <div class="flex items-center">
+                            <span class="text-white font-bold text-lg comic-font">${m.name}</span>
+                            <span class="rank-other text-slate-300 text-[10px] px-1.5 py-0.5 rounded font-bold ml-1">${m.rank}위</span>
                         </div>
-                    `;
-                });
+                        <span class="text-pink-400 font-black">${m.score}점</span>
+                    </div>
+                `).join('');
+
+                const teamStyles = {
+                    1: { color: "text-yellow-400", border: "border-yellow-500/50" },
+                    2: { color: "text-slate-300", border: "border-slate-300/50" },
+                    3: { color: "text-amber-500", border: "border-amber-600/50" },
+                    4: { color: "text-emerald-400", border: "border-emerald-500/50" }
+                };
+                const style = teamStyles[team.id];
 
                 teamsHTML += `
-                    <div class="bg-slate-800 p-5 rounded-3xl border-2 ${team.border} shadow-2xl pop-up" style="animation-delay: ${i * 0.15}s">
+                    <div class="bg-slate-800 p-5 rounded-3xl border-2 ${style.border} shadow-2xl pop-up">
                         <div class="flex justify-between items-end mb-4 border-b border-slate-700 pb-3">
-                            <h2 class="${team.color} text-2xl font-black comic-font flex items-center gap-2">
-                                <span class="text-3xl">${team.emoji}</span> ${team.title}
+                            <h2 class="${style.color} text-2xl font-black comic-font flex items-center gap-2">
+                                <span class="bg-pink-600 text-white text-xs px-2 py-1 rounded-lg mr-1">${team.finalRank}위</span>
+                                ${team.emoji} ${team.title}
                             </h2>
                             <div class="text-right">
-                                <p class="text-[10px] text-slate-400 font-bold mb-0.5">팀 합산 예상점수</p>
-                                <p class="text-white font-black text-xl bg-black/30 px-3 py-1 rounded-lg">${team.totalScore}<span class="text-sm font-normal text-slate-400 ml-1">점</span></p>
+                                <p class="text-[10px] text-slate-400 font-bold">팀 합계</p>
+                                <p class="text-white font-black text-xl">${team.totalScore}점</p>
                             </div>
                         </div>
-                        <div>
-                            ${membersHTML}
-                        </div>
+                        <div>${membersHTML}</div>
                     </div>
                 `;
-            }
+            });
 
             appDiv.innerHTML = `
                 <div class="text-center mb-8 fade-in pt-6">
-                    <button onclick="window.renderInputScreen()" class="text-slate-400 hover:text-white text-sm bg-slate-800 px-5 py-2.5 rounded-full mb-6 transition-colors font-bold shadow-md">
-                        ◀ 뒤로 가서 점수 다시 수정하기
-                    </button>
-                    <h2 class="text-xl font-bold text-yellow-400 mb-2 comic-font tracking-widest animate-pulse">소름돋는 밸런스!</h2>
-                    <h1 class="text-4xl md:text-5xl title-font text-white mb-2 leading-tight">
-                        제 2차전 팀 배정 결과
-                    </h1>
-                    <p class="text-slate-400 text-sm">1차전 점수를 바탕으로 공정하게 배정되었습니다.</p>
+                    <button onclick="window.renderInputScreen()" class="text-slate-400 hover:text-white text-sm bg-slate-800 px-5 py-2.5 rounded-full mb-6 font-bold">◀ 뒤로 가서 수정</button>
+                    <h2 class="text-xl font-bold text-yellow-400 mb-2 comic-font tracking-widest animate-pulse">결과가 서버에 저장되었습니다!</h2>
+                    <h1 class="text-4xl md:text-5xl title-font text-white mb-2 leading-tight">2차전 최종 팀 순위</h1>
+                    <p class="text-slate-400 text-sm">3번 앱(상품선택)으로 이동하면 자동으로 등수에 맞는 박스가 열립니다.</p>
                 </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                    ${teamsHTML}
-                </div>
-                
-                <div class="text-center pb-12 fade-in">
-                    <p class="comic-font text-2xl text-pink-400">"어제의 적이 오늘의 동지로! 건투를 빕니다!"</p>
-                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">${teamsHTML}</div>
             `;
         };
 
-        // 전체 초기화 (로컬 점수만 날림, 서버 명단은 안전함)
         window.resetData = function() {
-            if(confirm("모든 기입된 점수를 삭제하시겠습니까? (서버에서 가져온 이름 목록은 유지됩니다)")) {
+            if(confirm("모든 점수를 삭제하시겠습니까?")) {
                 localStorage.removeItem('round2_scores_by_name');
                 window.localScores = {};
                 window.renderInputScreen();
             }
         };
-
     </script>
 </body>
 </html>
