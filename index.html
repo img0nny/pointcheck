@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2차전 밸런스 팀 배정</title>
+    <title>2차전 팀 확인 및 밸런스 체크</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
@@ -15,10 +15,7 @@
         .pop-up { animation: popUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         @keyframes popUp { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         .btn-glow { box-shadow: 0 0 20px rgba(236, 72, 153, 0.4); }
-        .rank-1 { background: linear-gradient(135deg, #fbbf24, #d97706); }
-        .rank-2 { background: linear-gradient(135deg, #cbd5e1, #64748b); }
-        .rank-3 { background: linear-gradient(135deg, #d97706, #92400e); }
-        .rank-other { background: #334155; }
+        .rank-badge { background: #334155; }
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
@@ -27,9 +24,10 @@
 <body class="relative">
 
     <div id="app" class="w-full max-w-5xl mx-auto p-4 md:p-8 flex-1 flex flex-col">
+        <!-- 초기 로딩 화면 -->
         <div class="flex-1 flex justify-center items-center text-slate-400 text-lg font-bold flex-col gap-4 pt-20">
             <div class="text-5xl animate-spin comic-font">🌀</div>
-            <p class="animate-pulse">서버에서 명단을 불러오고 있습니다...</p>
+            <p class="animate-pulse">데이터를 불러오고 있습니다...</p>
         </div>
     </div>
 
@@ -49,9 +47,7 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         
-        // 1차전 팀 명단 참조
         const teamDocRef = doc(db, "bowling_event", "teams");
-        // 2차전 최종 순위 저장용 참조 (3번 앱에서 이 데이터를 읽음)
         const resultDocRef = doc(db, "bowling_event", "round2_results");
 
         window.currentView = null;
@@ -60,6 +56,7 @@
 
         const appDiv = document.getElementById('app');
 
+        // 실시간 명단 동기화
         onSnapshot(teamDocRef, (docSnap) => {
             if (docSnap.exists()) {
                 const cards = docSnap.data().cards;
@@ -86,6 +83,7 @@
             localStorage.setItem('round2_scores_by_name', JSON.stringify(window.localScores));
         };
 
+        // 점수 입력 화면
         window.renderInputScreen = function() {
             window.currentView = 'input';
             let inputsHTML = '';
@@ -93,10 +91,10 @@
                 const currentScore = (playerName && window.localScores[playerName] !== undefined) ? window.localScores[playerName] : '';
                 const isWaiting = !playerName;
                 inputsHTML += `
-                    <div class="bg-slate-800/80 p-5 rounded-2xl border border-slate-600 flex flex-col gap-3 shadow-lg ${isWaiting ? 'opacity-40 grayscale' : 'hover:border-pink-500'} transition-colors">
+                    <div class="bg-slate-800/80 p-5 rounded-2xl border border-slate-600 flex flex-col gap-3 shadow-lg ${isWaiting ? 'opacity-40 grayscale' : 'hover:border-blue-500'} transition-colors">
                         <input type="text" id="name_${index}" value="${playerName}" class="w-full bg-transparent ${isWaiting ? 'text-slate-500' : 'text-white'} font-black text-2xl md:text-3xl border-b border-slate-600 outline-none pb-2 comic-font text-center cursor-default" placeholder="[ 대기 중 ]" readonly>
                         <div class="flex items-center gap-2 mt-1">
-                            <input type="number" id="score_${index}" value="${currentScore}" oninput="window.saveScore('${playerName}', this.value)" class="w-full bg-slate-900 ${isWaiting ? 'text-slate-600' : 'text-pink-400'} font-black text-3xl text-center rounded-lg py-3 outline-none border border-slate-700 focus:border-pink-500 transition-colors" placeholder="점수" ${isWaiting ? 'disabled' : ''}>
+                            <input type="number" id="score_${index}" value="${currentScore}" oninput="window.saveScore('${playerName}', this.value)" class="w-full bg-slate-900 ${isWaiting ? 'text-slate-600' : 'text-blue-400'} font-black text-3xl text-center rounded-lg py-3 outline-none border border-slate-700 focus:border-blue-500 transition-colors" placeholder="점수" ${isWaiting ? 'disabled' : ''}>
                             <span class="text-slate-400 font-bold whitespace-nowrap">점</span>
                         </div>
                     </div>
@@ -105,24 +103,25 @@
 
             appDiv.innerHTML = `
                 <div class="text-center mb-8 fade-in pt-6">
-                    <p class="text-pink-400 font-bold tracking-widest mb-2 comic-font text-xl">1차전 명단 동기화 완료!</p>
+                    <p class="text-blue-400 font-bold tracking-widest mb-2 comic-font text-xl">1차전 성적 기반 팀 밸런싱</p>
                     <h1 class="text-4xl md:text-5xl title-font text-white mb-4 leading-tight">개인별 점수 입력</h1>
                     <p class="text-slate-400 text-sm bg-slate-800/50 inline-block px-4 py-2 rounded-full border border-slate-700">
-                        점수를 입력하면 2차전 밸런스 팀이 자동 배정됩니다.
+                        1차전 점수를 입력하면 실시간으로 최적의 <strong class="text-blue-400">팀 밸런스</strong>를 계산합니다.
                     </p>
                 </div>
                 <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 md:gap-5 mb-10 fade-in">
                     ${inputsHTML}
                 </div>
                 <div class="flex flex-col items-center gap-5 pb-12 fade-in">
-                    <button onclick="window.calculateTeams()" class="btn-glow bg-gradient-to-r from-pink-500 to-purple-600 text-white font-black py-4 px-12 rounded-full text-xl hover:scale-105 active:scale-95 transition-all w-full md:w-auto shadow-xl">
-                        ⚖️ 2차전 밸런스 팀 배정하기!
+                    <button onclick="window.calculateTeams()" class="btn-glow bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-black py-4 px-12 rounded-full text-xl hover:scale-105 active:scale-95 transition-all w-full md:w-auto shadow-xl">
+                        ⚖️ 2차전 팀 구성 확인하기
                     </button>
                     <button onclick="window.resetData()" class="text-slate-400 text-sm underline hover:text-white transition-colors bg-slate-800/50 px-4 py-2 rounded-full">입력된 점수 초기화</button>
                 </div>
             `;
         };
 
+        // 팀 계산 및 저장
         window.calculateTeams = async function() {
             let updatedPlayers = [];
             let validPlayerCount = 0;
@@ -137,10 +136,9 @@
             }
 
             if(validPlayerCount < 16) {
-                if(!confirm(`현재 16명 중 ${validPlayerCount}명만 참여했습니다. 그래도 배정을 진행할까요?`)) return;
+                if(!confirm(`현재 ${validPlayerCount}명만 참여했습니다. 나머지 인원은 0점으로 처리됩니다. 계속할까요?`)) return;
             }
 
-            // 점수 내림차순 정렬 후 지그재그 배정
             const sortedPlayers = [...updatedPlayers].sort((a, b) => b.score - a.score);
             const pattern = [1, 2, 3, 4, 4, 3, 2, 1, 1, 2, 3, 4, 4, 3, 2, 1];
             
@@ -154,22 +152,19 @@
             sortedPlayers.forEach((player, index) => {
                 const teamNum = pattern[index];
                 if(teams[teamNum]) {
-                    player.rank = index + 1;
+                    player.internalRank = index + 1;
                     teams[teamNum].members.push(player);
                     teams[teamNum].totalScore += player.score;
                 }
             });
 
-            // 팀별 합산 점수 기준으로 팀 순위(최종 등수) 매기기
+            // 팀 점수 합산 기준 순위 (3번 앱 상품 박스 매칭용)
             const teamRankings = Object.values(teams).sort((a, b) => b.totalScore - a.totalScore);
             teamRankings.forEach((team, idx) => { team.finalRank = idx + 1; });
 
-            // 닉네임별로 최종 등수를 매핑하여 서버에 저장 (3번 앱 연동용)
             const userRankMap = {};
             teamRankings.forEach(team => {
-                team.members.forEach(m => {
-                    userRankMap[m.name] = team.finalRank;
-                });
+                team.members.forEach(m => { userRankMap[m.name] = team.finalRank; });
             });
 
             try {
@@ -180,24 +175,26 @@
                 });
                 window.renderResultScreen(teams, teamRankings);
             } catch (e) {
-                alert("결과 저장 중 오류가 발생했습니다. 다시 시도해 주세요.");
+                alert("결과 저장 중 오류가 발생했습니다.");
             }
         };
 
+        // 결과 확인 화면 (수정된 부분)
         window.renderResultScreen = function(teams, teamRankings) {
             window.currentView = 'result';
             window.scrollTo(0, 0); 
 
             let teamsHTML = '';
-            // 팀 번호 순서가 아닌, "최종 점수 등수" 순으로 보여줌
-            teamRankings.forEach((team) => {
+            // 팀 번호 순서(1~4)대로 노출하되, 등수 뱃지를 함께 표시
+            [1, 2, 3, 4].forEach((teamId) => {
+                const team = teams[teamId];
                 let membersHTML = team.members.map(m => `
                     <div class="flex justify-between items-center bg-slate-900/80 p-3 rounded-xl border border-slate-700/50 mb-2">
                         <div class="flex items-center">
                             <span class="text-white font-bold text-lg comic-font">${m.name}</span>
-                            <span class="rank-other text-slate-300 text-[10px] px-1.5 py-0.5 rounded font-bold ml-1">${m.rank}위</span>
+                            <span class="rank-badge text-slate-400 text-[10px] px-1.5 py-0.5 rounded font-bold ml-2">성적 ${m.internalRank}위</span>
                         </div>
-                        <span class="text-pink-400 font-black">${m.score}점</span>
+                        <span class="text-blue-400 font-black">${m.score}점</span>
                     </div>
                 `).join('');
 
@@ -213,12 +210,12 @@
                     <div class="bg-slate-800 p-5 rounded-3xl border-2 ${style.border} shadow-2xl pop-up">
                         <div class="flex justify-between items-end mb-4 border-b border-slate-700 pb-3">
                             <h2 class="${style.color} text-2xl font-black comic-font flex items-center gap-2">
-                                <span class="bg-pink-600 text-white text-xs px-2 py-1 rounded-lg mr-1">${team.finalRank}위</span>
                                 ${team.emoji} ${team.title}
+                                <span class="bg-blue-600/20 text-blue-400 text-[11px] px-2 py-1 rounded-md border border-blue-500/30 ml-2">예상 등수: ${team.finalRank}위</span>
                             </h2>
                             <div class="text-right">
-                                <p class="text-[10px] text-slate-400 font-bold">팀 합계</p>
-                                <p class="text-white font-black text-xl">${team.totalScore}점</p>
+                                <p class="text-[10px] text-slate-400 font-bold">팀 전력 지수</p>
+                                <p class="text-white font-black text-xl">${team.totalScore}<span class="text-sm font-normal ml-0.5 opacity-50">pt</span></p>
                             </div>
                         </div>
                         <div>${membersHTML}</div>
@@ -228,12 +225,15 @@
 
             appDiv.innerHTML = `
                 <div class="text-center mb-8 fade-in pt-6">
-                    <button onclick="window.renderInputScreen()" class="text-slate-400 hover:text-white text-sm bg-slate-800 px-5 py-2.5 rounded-full mb-6 font-bold">◀ 뒤로 가서 수정</button>
-                    <h2 class="text-xl font-bold text-yellow-400 mb-2 comic-font tracking-widest animate-pulse">결과가 서버에 저장되었습니다!</h2>
-                    <h1 class="text-4xl md:text-5xl title-font text-white mb-2 leading-tight">2차전 최종 팀 순위</h1>
-                    <p class="text-slate-400 text-sm">3번 앱(상품선택)으로 이동하면 자동으로 등수에 맞는 박스가 열립니다.</p>
+                    <button onclick="window.renderInputScreen()" class="text-slate-400 hover:text-white text-sm bg-slate-800 px-5 py-2.5 rounded-full mb-6 font-bold transition-all shadow-md">◀ 점수 다시 수정하기</button>
+                    <h2 class="text-xl font-bold text-blue-400 mb-2 comic-font tracking-widest animate-pulse">밸런스 배정 완료!</h2>
+                    <h1 class="text-4xl md:text-5xl title-font text-white mb-2 leading-tight">제 2차전 팀 확인</h1>
+                    <p class="text-slate-400 text-sm">경기 시작 전 본인의 팀과 팀원들의 구성을 확인하세요.</p>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">${teamsHTML}</div>
+                <div class="text-center pb-12 fade-in">
+                    <p class="comic-font text-2xl text-blue-400">"박빙의 승부! 최고의 팀워크를 보여주세요!"</p>
+                </div>
             `;
         };
 
