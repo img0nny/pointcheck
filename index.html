@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2차전 팀 확인 및 밸런스 체크</title>
+    <title>2차전 팀 확인 및 최종 점수</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
@@ -15,6 +15,7 @@
         .pop-up { animation: popUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         @keyframes popUp { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         .btn-glow { box-shadow: 0 0 20px rgba(236, 72, 153, 0.4); }
+        .btn-glow-blue { box-shadow: 0 0 20px rgba(59, 130, 246, 0.4); }
         .rank-badge { background: #334155; }
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -52,7 +53,9 @@
 
         window.currentView = null;
         window.playersData = []; 
-        window.localScores = JSON.parse(localStorage.getItem('round2_scores_by_name')) || {};
+        window.localScores = JSON.parse(localStorage.getItem('round1_scores_by_name')) || {};
+        window.round2Scores = JSON.parse(localStorage.getItem('round2_actual_scores_by_name')) || {};
+        window.currentTeams = null; // 팀 배정 결과를 임시 저장
 
         const appDiv = document.getElementById('app');
 
@@ -77,13 +80,23 @@
             }
         });
 
+        // 1차전 점수 로컬 저장
         window.saveScore = function(name, value) {
             if(!name) return;
             window.localScores[name] = value;
-            localStorage.setItem('round2_scores_by_name', JSON.stringify(window.localScores));
+            localStorage.setItem('round1_scores_by_name', JSON.stringify(window.localScores));
         };
 
-        // 점수 입력 화면
+        // 2차전 점수 로컬 저장
+        window.saveRound2Score = function(name, value) {
+            if(!name) return;
+            window.round2Scores[name] = value;
+            localStorage.setItem('round2_actual_scores_by_name', JSON.stringify(window.round2Scores));
+        };
+
+        // ==========================================
+        // 1. 점수 입력 화면 (1차전 기반)
+        // ==========================================
         window.renderInputScreen = function() {
             window.currentView = 'input';
             let inputsHTML = '';
@@ -104,7 +117,7 @@
             appDiv.innerHTML = `
                 <div class="text-center mb-8 fade-in pt-6">
                     <p class="text-blue-400 font-bold tracking-widest mb-2 comic-font text-xl">스마트 AI 밸런스 배정</p>
-                    <h1 class="text-4xl md:text-5xl title-font text-white mb-4 leading-tight">개인별 점수 입력</h1>
+                    <h1 class="text-4xl md:text-5xl title-font text-white mb-4 leading-tight">1차전 점수 입력</h1>
                     <p class="text-slate-400 text-sm bg-slate-800/50 inline-block px-4 py-2 rounded-full border border-slate-700">
                         1차전 점수를 입력하면 가장 공정한 <strong class="text-blue-400">황금 팀 밸런스</strong>를 자동 계산합니다.
                     </p>
@@ -113,15 +126,15 @@
                     ${inputsHTML}
                 </div>
                 <div class="flex flex-col items-center gap-5 pb-12 fade-in">
-                    <button onclick="window.calculateTeams()" class="btn-glow bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-black py-4 px-12 rounded-full text-xl hover:scale-105 active:scale-95 transition-all w-full md:w-auto shadow-xl">
+                    <button onclick="window.calculateTeams()" class="btn-glow-blue bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-black py-4 px-12 rounded-full text-xl hover:scale-105 active:scale-95 transition-all w-full md:w-auto shadow-xl">
                         ⚖️ 2차전 팀 구성 확인하기
                     </button>
-                    <button onclick="window.resetData()" class="text-slate-400 text-sm underline hover:text-white transition-colors bg-slate-800/50 px-4 py-2 rounded-full">입력된 점수 초기화</button>
+                    <button onclick="window.resetData()" class="text-slate-400 text-sm underline hover:text-white transition-colors bg-slate-800/50 px-4 py-2 rounded-full">입력된 데이터 전체 초기화</button>
                 </div>
             `;
         };
 
-        // 팀 계산 및 저장 (스마트 황금 밸런스 알고리즘 적용)
+        // 팀 계산 및 저장 (스마트 황금 밸런스 알고리즘)
         window.calculateTeams = async function() {
             let updatedPlayers = [];
             let validPlayerCount = 0;
@@ -139,9 +152,7 @@
                 if(!confirm(`현재 ${validPlayerCount}명만 참여했습니다. 나머지 인원은 0점으로 처리됩니다. 계속할까요?`)) return;
             }
 
-            // 점수순 정렬
             const sortedPlayers = [...updatedPlayers].sort((a, b) => b.score - a.score);
-            
             let teams = {
                 1: { id: 1, title: "1팀", emoji: "🐯", members: [], totalScore: 0 },
                 2: { id: 2, title: "2팀", emoji: "🦅", members: [], totalScore: 0 },
@@ -149,20 +160,13 @@
                 4: { id: 4, title: "4팀", emoji: "🦖", members: [], totalScore: 0 }
             };
 
-            // 팀당 배정할 수 있는 최대 인원 (15명이면 최대 4명까지 허용)
             const maxPerTeam = Math.ceil(sortedPlayers.length / 4);
 
-            // 🌟 핵심 로직: 현재 팀 합산 점수가 "가장 낮은" 팀에게 다음 사람을 최우선 배정!
             sortedPlayers.forEach((player, index) => {
                 player.internalRank = index + 1;
-                
-                // 아직 정원이 꽉 차지 않은 팀들만 필터링
                 const availableTeams = Object.values(teams).filter(t => t.members.length < maxPerTeam);
-                
-                // 팀 합산 점수가 가장 낮은 순으로 정렬 (동점이면 1팀부터)
                 availableTeams.sort((a, b) => a.totalScore - b.totalScore || a.id - b.id);
                 
-                // 가장 점수가 부족한 팀에 플레이어 투입
                 const targetTeam = availableTeams[0];
                 if(targetTeam) {
                     targetTeam.members.push(player);
@@ -170,34 +174,37 @@
                 }
             });
 
-            // 데이터 연동을 위한 최종 등수 매기기 (상품 박스 선택용)
+            // 초기 1차전 팀 점수 기준으로 Firestore에 순위 저장 (추후 최종 점수로 덮어씌워짐)
             const teamRankings = Object.values(teams).sort((a, b) => b.totalScore - a.totalScore);
             teamRankings.forEach((team, idx) => { team.finalRank = idx + 1; });
-
             const userRankMap = {};
-            teamRankings.forEach(team => {
-                team.members.forEach(m => { userRankMap[m.name] = team.finalRank; });
-            });
+            teamRankings.forEach(team => { team.members.forEach(m => { userRankMap[m.name] = team.finalRank; }); });
 
             try {
                 await setDoc(resultDocRef, { 
                     rankData: userRankMap, 
                     lastUpdate: new Date().getTime(),
-                    teamDetails: teamRankings 
+                    teamDetails: teamRankings,
+                    isFinal: false
                 });
-                window.renderResultScreen(teams); // UI용 렌더링
+                
+                // 로컬 및 전역 변수에 팀 저장
+                localStorage.setItem('calculated_teams', JSON.stringify(teams));
+                window.currentTeams = teams;
+                window.renderResultScreen(teams);
             } catch (e) {
-                alert("결과 저장 중 오류가 발생했습니다.");
+                alert("팀 배정 저장 중 오류가 발생했습니다.");
             }
         };
 
-        // 결과 확인 화면 (요청하신 부분 모두 삭제됨)
+        // ==========================================
+        // 2. 결과 확인 화면 (1차전 후 밸런스 확인용)
+        // ==========================================
         window.renderResultScreen = function(teams) {
             window.currentView = 'result';
             window.scrollTo(0, 0); 
 
             let teamsHTML = '';
-            // 팀 번호 1~4팀 순서대로 깔끔하게 출력
             [1, 2, 3, 4].forEach((teamId) => {
                 const team = teams[teamId];
                 let membersHTML = team.members.map(m => `
@@ -242,16 +249,220 @@
                     <p class="text-slate-400 text-sm">경기 시작 전 본인의 팀과 팀원들의 구성을 확인하세요.</p>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">${teamsHTML}</div>
-                <div class="text-center pb-12 fade-in">
+                <div class="text-center pb-12 fade-in flex flex-col items-center gap-6">
                     <p class="comic-font text-2xl text-blue-400">"박빙의 승부! 최고의 팀워크를 보여주세요!"</p>
+                    
+                    <!-- 🔥 2차전 점수 입력으로 넘어가는 버튼 추가 🔥 -->
+                    <button onclick="window.renderRound2InputScreen()" class="btn-glow bg-gradient-to-r from-pink-500 to-rose-600 text-white font-black py-5 px-10 rounded-2xl text-2xl hover:scale-105 active:scale-95 transition-all w-full md:w-auto shadow-2xl mt-4 border border-pink-400/50 flex flex-col items-center">
+                        <span class="text-sm font-bold text-pink-200 mb-1 font-sans">경기가 모두 끝났다면?</span>
+                        <span>🎳 2차전 최종 점수 입력하기 ◀</span>
+                    </button>
                 </div>
             `;
         };
 
+
+        // ==========================================
+        // 3. 2차전 점수 입력 화면
+        // ==========================================
+        window.renderRound2InputScreen = function() {
+            window.currentView = 'round2_input';
+            window.scrollTo(0, 0);
+
+            // 새로고침 시 로컬스토리지에서 팀 정보 복구
+            if (!window.currentTeams) {
+                const saved = localStorage.getItem('calculated_teams');
+                if (saved) {
+                    window.currentTeams = JSON.parse(saved);
+                } else {
+                    return window.renderInputScreen(); // 정보가 아예 없으면 첫화면으로
+                }
+            }
+
+            let html = '';
+            [1, 2, 3, 4].forEach(teamId => {
+                const team = window.currentTeams[teamId];
+                let membersHTML = '';
+                
+                team.members.forEach((m, idx) => {
+                    const r2Score = window.round2Scores[m.name] !== undefined ? window.round2Scores[m.name] : '';
+                    membersHTML += `
+                        <div class="flex items-center justify-between bg-slate-900/90 p-3 rounded-xl border border-slate-700 mb-2 focus-within:border-pink-500 transition-colors">
+                            <div class="flex flex-col">
+                                <span class="text-white font-bold text-lg comic-font">${m.name}</span>
+                                <span class="text-slate-400 text-xs font-bold">1차전: <span class="text-blue-300">${m.score}점</span></span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="number" id="r2_score_${teamId}_${idx}" value="${r2Score}" oninput="window.saveRound2Score('${m.name}', this.value)" class="w-24 bg-slate-950 text-pink-400 font-black text-2xl text-center rounded-lg py-2 outline-none border border-slate-700 focus:border-pink-500 transition-colors" placeholder="점수">
+                                <span class="text-slate-400 font-bold">점</span>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                const teamStyles = {
+                    1: { color: "text-yellow-400", border: "border-yellow-500/30" },
+                    2: { color: "text-slate-300", border: "border-slate-300/30" },
+                    3: { color: "text-amber-500", border: "border-amber-600/30" },
+                    4: { color: "text-emerald-400", border: "border-emerald-500/30" }
+                };
+                const style = teamStyles[team.id];
+
+                html += `
+                    <div class="bg-slate-800 p-4 rounded-3xl border ${style.border} shadow-lg mb-6">
+                        <h2 class="${style.color} text-xl font-black comic-font mb-3 flex items-center gap-2">
+                            ${team.emoji} ${team.title}
+                        </h2>
+                        <div>${membersHTML}</div>
+                    </div>
+                `;
+            });
+
+            appDiv.innerHTML = `
+                <div class="text-center mb-8 fade-in pt-6">
+                    <button onclick="window.renderResultScreen(window.currentTeams)" class="text-slate-400 hover:text-white text-sm bg-slate-800 px-5 py-2.5 rounded-full mb-6 font-bold transition-all shadow-md">◀ 팀 화면으로 돌아가기</button>
+                    <p class="text-pink-400 font-bold tracking-widest mb-2 comic-font text-xl animate-pulse">마지막 승부!</p>
+                    <h1 class="text-4xl md:text-5xl title-font text-white mb-4 leading-tight">2차전 점수 입력</h1>
+                    <p class="text-slate-400 text-sm bg-slate-800/50 inline-block px-4 py-2 rounded-full border border-slate-700">
+                        기록된 1차전 점수와 <strong class="text-pink-400">2차전 점수가 합산</strong>되어 최종 등수가 결정됩니다.
+                    </p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 fade-in">
+                    ${html}
+                </div>
+                
+                <div class="flex flex-col items-center gap-5 pb-12 fade-in mt-8">
+                    <button onclick="window.calculateFinalResults()" class="btn-glow bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-black py-4 px-12 rounded-full text-xl hover:scale-105 active:scale-95 transition-all w-full md:w-auto shadow-xl">
+                        🏆 최종 순위 발표 확인하기
+                    </button>
+                </div>
+            `;
+        };
+
+        // ==========================================
+        // 4. 최종 결과 계산 및 Firestore 업데이트
+        // ==========================================
+        window.calculateFinalResults = async function() {
+            let hasEmpty = false;
+            // 깊은 복사로 기존 객체 보호
+            let finalTeams = JSON.parse(JSON.stringify(window.currentTeams)); 
+
+            [1, 2, 3, 4].forEach(teamId => {
+                let finalTeamTotal = 0;
+                finalTeams[teamId].members.forEach((m, idx) => {
+                    const r2Val = document.getElementById(`r2_score_${teamId}_${idx}`).value.trim();
+                    if (r2Val === '') hasEmpty = true;
+                    
+                    m.r2Score = r2Val === '' ? 0 : parseInt(r2Val, 10);
+                    m.finalScore = m.score + m.r2Score; // 1차전 + 2차전
+                    finalTeamTotal += m.finalScore;
+                });
+                finalTeams[teamId].finalTotalScore = finalTeamTotal;
+            });
+
+            if (hasEmpty) {
+                if (!confirm("2차전 점수가 입력되지 않은 인원이 있습니다. 0점으로 처리됩니다. 계속할까요?")) return;
+            }
+
+            // 최종 합산 점수 기준으로 팀 순위 산정
+            const teamRankings = Object.values(finalTeams).sort((a, b) => b.finalTotalScore - a.finalTotalScore);
+            teamRankings.forEach((team, idx) => { team.finalRank = idx + 1; });
+
+            // Firestore에 저장될 유저 맵핑 업데이트 (상품 앱과 연동)
+            const userRankMap = {};
+            teamRankings.forEach(team => {
+                team.members.forEach(m => { userRankMap[m.name] = team.finalRank; });
+            });
+
+            try {
+                // 기존 Firestore 문서를 최종 순위로 덮어쓰기!
+                await setDoc(resultDocRef, { 
+                    rankData: userRankMap, 
+                    lastUpdate: new Date().getTime(),
+                    teamDetails: teamRankings,
+                    isFinal: true 
+                });
+                
+                window.renderFinalResultScreen(teamRankings);
+            } catch (e) {
+                alert("최종 결과 저장 중 오류가 발생했습니다.");
+            }
+        };
+
+        // ==========================================
+        // 5. 최종 순위 발표 화면
+        // ==========================================
+        window.renderFinalResultScreen = function(teamRankings) {
+            window.currentView = 'final_result';
+            window.scrollTo(0, 0); 
+
+            let teamsHTML = '';
+            // 등수(1위~4위) 순서대로 정렬하여 출력
+            teamRankings.forEach((team) => {
+                
+                // 요청하신 포맷: "닉네임 : 1차전 00점, 2차전 00점 최종 00점" 적용
+                let membersHTML = team.members.map(m => `
+                    <div class="flex flex-col bg-slate-900/80 p-4 rounded-xl border border-slate-700/50 mb-3 shadow-inner">
+                        <span class="text-white font-bold text-xl comic-font mb-2">${m.name}</span>
+                        <div class="flex justify-between items-center text-[13px] md:text-sm font-bold bg-black/30 p-2 rounded-lg">
+                            <span class="text-slate-400">1차전 <span class="text-blue-400 text-base ml-1">${m.score}</span>점</span>
+                            <span class="text-slate-600 font-black">+</span>
+                            <span class="text-slate-400">2차전 <span class="text-pink-400 text-base ml-1">${m.r2Score}</span>점</span>
+                            <span class="text-slate-600 font-black">=</span>
+                            <span class="text-yellow-400">최종 <span class="text-lg md:text-xl ml-1 font-black">${m.finalScore}</span>점</span>
+                        </div>
+                    </div>
+                `).join('');
+
+                // 등수별 뱃지와 색상 차별화
+                let rankStyle = '';
+                let rankLabel = '';
+                if(team.finalRank === 1) { rankStyle = "text-yellow-400 border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]"; rankLabel = "🥇 1위 (골드)"; }
+                else if(team.finalRank === 2) { rankStyle = "text-slate-300 border-slate-400"; rankLabel = "🥈 2위 (실버)"; }
+                else if(team.finalRank === 3) { rankStyle = "text-amber-500 border-amber-600"; rankLabel = "🥉 3위 (브론즈)"; }
+                else { rankStyle = "text-emerald-400 border-emerald-500"; rankLabel = "😅 4위 (그린)"; }
+
+                teamsHTML += `
+                    <div class="bg-slate-800 p-5 rounded-3xl border-2 ${rankStyle} pop-up relative overflow-hidden">
+                        <div class="absolute top-0 right-0 bg-black/40 px-4 py-2 rounded-bl-2xl font-black text-xl text-white backdrop-blur-sm z-10">
+                            ${rankLabel}
+                        </div>
+                        <div class="flex justify-between items-end mb-4 border-b border-slate-700 pb-3 pt-6">
+                            <h2 class="${rankStyle.split(' ')[0]} text-2xl font-black comic-font flex items-center gap-2 relative z-10">
+                                ${team.emoji} ${team.title}
+                            </h2>
+                            <div class="text-right relative z-10">
+                                <p class="text-[11px] text-slate-300 font-bold bg-slate-900 px-2 py-1 rounded mb-1">팀 최종 합계</p>
+                                <p class="text-white font-black text-3xl drop-shadow-md">${team.finalTotalScore}<span class="text-base font-normal ml-1 opacity-70">점</span></p>
+                            </div>
+                        </div>
+                        <div class="relative z-10">${membersHTML}</div>
+                    </div>
+                `;
+            });
+
+            appDiv.innerHTML = `
+                <div class="text-center mb-8 fade-in pt-6">
+                    <button onclick="window.renderRound2InputScreen()" class="text-slate-400 hover:text-white text-sm bg-slate-800 px-5 py-2.5 rounded-full mb-6 font-bold transition-all shadow-md">◀ 2차전 점수 수정하기</button>
+                    <p class="text-yellow-400 font-bold tracking-widest mb-2 comic-font text-2xl animate-bounce">🎊 최종 경기 종료 🎊</p>
+                    <h1 class="text-4xl md:text-5xl title-font text-white mb-4 leading-tight">최종 순위 발표</h1>
+                    <p class="text-slate-400 text-sm border border-slate-700 bg-slate-800/50 inline-block px-4 py-2 rounded-full">
+                        수고하셨습니다! 이제 상품 추첨을 위해 <strong class="text-pink-400">상품 선택 화면(3번 앱)</strong>으로 이동해주세요.
+                    </p>
+                </div>
+                <div class="grid grid-cols-1 gap-8 mb-16 max-w-2xl mx-auto w-full">${teamsHTML}</div>
+            `;
+        };
+
         window.resetData = function() {
-            if(confirm("모든 점수를 삭제하시겠습니까?")) {
-                localStorage.removeItem('round2_scores_by_name');
+            if(confirm("모든 기입된 점수를 삭제하시겠습니까?")) {
+                localStorage.removeItem('round1_scores_by_name');
+                localStorage.removeItem('round2_actual_scores_by_name');
+                localStorage.removeItem('calculated_teams');
                 window.localScores = {};
+                window.round2Scores = {};
+                window.currentTeams = null;
                 window.renderInputScreen();
             }
         };
