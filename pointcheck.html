@@ -404,10 +404,10 @@
 
                 let rankStyle = '';
                 let rankLabel = '';
-                if(team.finalRank === 1) { rankStyle = "text-yellow-400 border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]"; rankLabel = "🥇 1위 (골드)"; }
-                else if(team.finalRank === 2) { rankStyle = "text-slate-300 border-slate-400"; rankLabel = "🥈 2위 (실버)"; }
-                else if(team.finalRank === 3) { rankStyle = "text-amber-500 border-amber-600"; rankLabel = "🥉 3위 (브론즈)"; }
-                else { rankStyle = "text-emerald-400 border-emerald-500"; rankLabel = "😅 4위 (그린)"; }
+                if(team.finalRank === 1) { rankStyle = "text-yellow-400 border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]"; rankLabel = "🥇 1위"; }
+                else if(team.finalRank === 2) { rankStyle = "text-slate-300 border-slate-400"; rankLabel = "🥈 2위"; }
+                else if(team.finalRank === 3) { rankStyle = "text-amber-500 border-amber-600"; rankLabel = "🥉 3위"; }
+                else { rankStyle = "text-emerald-400 border-emerald-500"; rankLabel = "😅 4위"; }
 
                 teamsHTML += `
                     <div class="bg-slate-800 p-5 rounded-3xl border-2 ${rankStyle} pop-up relative overflow-hidden">
