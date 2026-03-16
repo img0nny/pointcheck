@@ -98,7 +98,7 @@
                 const currentScore = (playerName && window.localScores[playerName] !== undefined) ? window.localScores[playerName] : '';
                 const isWaiting = !playerName;
                 inputsHTML += `
-                    <div class="bg-slate-800/80 p-5 rounded-2xl border border-slate-600 flex flex-col gap-3 shadow-lg ${isWaiting ? 'opacity-40 grayscale' : 'hover:border-blue-500'} transition-colors">
+                    <div class="bg-slate-800/80 p-5 rounded-2xl border border-slate-600 flex flex-col gap-3 shadow-lg ${isWaiting ? 'opacity-40 grayscale' : 'hover:border-pink-500'} transition-colors">
                         <input type="text" id="name_${index}" value="${playerName}" class="w-full bg-transparent ${isWaiting ? 'text-slate-500' : 'text-white'} font-black text-2xl md:text-3xl border-b border-slate-600 outline-none pb-2 comic-font text-center cursor-default" placeholder="[ 대기 중 ]" readonly>
                         <div class="flex items-center gap-2 mt-1">
                             <input type="number" id="score_${index}" value="${currentScore}" oninput="window.saveScore('${playerName}', this.value)" class="w-full bg-slate-900 ${isWaiting ? 'text-slate-600' : 'text-blue-400'} font-black text-3xl text-center rounded-lg py-3 outline-none border border-slate-700 focus:border-blue-500 transition-colors" placeholder="점수" ${isWaiting ? 'disabled' : ''}>
@@ -363,26 +363,18 @@
         };
 
         // ==========================================
-        // 5. 최종 순위 발표 화면 (개인 순위 로직 추가됨)
+        // 5. 최종 순위 발표 화면 (팀 이름 및 이모지 크기 대폭 상향)
         // ==========================================
         window.renderFinalResultScreen = function(teamRankings) {
             window.currentView = 'final_result';
             window.scrollTo(0, 0); 
 
-            // --- 개인 등수 산정을 위한 데이터 정렬 ---
             let allPlayers = [];
             teamRankings.forEach(team => {
-                team.members.forEach(m => {
-                    allPlayers.push(m);
-                });
+                team.members.forEach(m => { allPlayers.push(m); });
             });
-            // 합산 점수(finalScore) 기준 내림차순 정렬
             allPlayers.sort((a, b) => b.finalScore - a.finalScore);
-            
-            // 모든 플레이어에게 개인 등수 부여
-            allPlayers.forEach((p, idx) => {
-                p.individualOverallRank = idx + 1;
-            });
+            allPlayers.forEach((p, idx) => { p.individualOverallRank = idx + 1; });
 
             let teamsHTML = '';
             teamRankings.forEach((team) => {
@@ -409,20 +401,27 @@
                 else if(team.finalRank === 3) { rankStyle = "text-amber-500 border-amber-600"; rankLabel = "🥉 3위"; }
                 else { rankStyle = "text-emerald-400 border-emerald-500"; rankLabel = "😅 4위"; }
 
+                // 🚨 [수정 포인트] 팀 이름(h2)과 이모지의 크기를 키우고, 오른쪽 등수 배지와 균형을 맞췄습니다.
                 teamsHTML += `
-                    <div class="bg-slate-800 p-5 rounded-3xl border-2 ${rankStyle} pop-up relative overflow-hidden">
-                        <div class="absolute top-0 right-0 bg-black/40 px-4 py-2 rounded-bl-2xl font-black text-xl text-white backdrop-blur-sm z-10">
+                    <div class="bg-slate-800 p-6 rounded-3xl border-2 ${rankStyle} pop-up relative overflow-hidden mb-8">
+                        <!-- 오른쪽 상단 등수 표시 박스 (크기 및 여백 조정) -->
+                        <div class="absolute top-0 right-0 bg-black/50 px-6 py-3 rounded-bl-3xl font-black text-2xl text-white backdrop-blur-md z-20 border-l border-b border-white/10 shadow-lg">
                             ${rankLabel}
                         </div>
-                        <div class="flex justify-between items-end mb-4 border-b border-slate-700 pb-3 pt-6">
-                            <h2 class="${rankStyle.split(' ')[0]} text-2xl font-black comic-font flex items-center gap-2 relative z-10">
-                                ${team.emoji} ${team.title}
+                        
+                        <div class="flex justify-between items-center mb-6 border-b border-slate-700 pb-5 pt-8">
+                            <!-- 🔥 팀 이름 및 이모지 크기 대폭 확대 (text-5xl) -->
+                            <h2 class="${rankStyle.split(' ')[0]} text-4xl md:text-5xl font-black comic-font flex items-center gap-4 relative z-10 drop-shadow-lg">
+                                <span class="text-5xl md:text-6xl">${team.emoji}</span>
+                                <span>${team.title}</span>
                             </h2>
+                            
                             <div class="text-right relative z-10">
-                                <p class="text-[11px] text-slate-300 font-bold bg-slate-900 px-2 py-1 rounded mb-1">팀 최종 합계</p>
-                                <p class="text-white font-black text-3xl drop-shadow-md">${team.finalTotalScore}<span class="text-base font-normal ml-1 opacity-70">점</span></p>
+                                <p class="text-[12px] text-slate-300 font-bold bg-slate-900/80 px-3 py-1 rounded-full mb-1 inline-block border border-slate-700">팀 최종 합계</p>
+                                <p class="text-white font-black text-4xl md:text-5xl drop-shadow-xl">${team.finalTotalScore}<span class="text-lg font-normal ml-1 opacity-70">점</span></p>
                             </div>
                         </div>
+                        
                         <div class="relative z-10">${membersHTML}</div>
                     </div>
                 `;
@@ -437,7 +436,7 @@
                         수고하셨습니다! 이제 상품 추첨을 위해 <strong class="text-pink-400">상품 선택 화면(3번 앱)</strong>으로 이동해주세요.
                     </p>
                 </div>
-                <div class="grid grid-cols-1 gap-8 mb-16 max-w-2xl mx-auto w-full">${teamsHTML}</div>
+                <div class="grid grid-cols-1 gap-4 mb-16 max-w-3xl mx-auto w-full">${teamsHTML}</div>
             `;
         };
 
